@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <button id="record">Record 10 Detik</button>
+  <video id="preview" autoplay muted></video>
+
+  <script>
+    let recorder;
+    let chunks = [];
+
+    document.getElementById("record").onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      document.getElementById("preview").srcObject = stream;
+
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const form = new FormData();
+        form.append("video", blob);
+
+        await fetch("/api/upload-video", {
+          method: "POST",
+          body: form
+        });
+
+        alert("Video dikirim");
+        chunks = [];
+      };
+
+      recorder.start();
+      setTimeout(() => recorder.stop(), 10000);
+    };
+  </script>
+</body>
+</html>

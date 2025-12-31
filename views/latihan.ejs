@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title><%= title %> - Beauty Fitness Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            peach: {
+              50: '#FFF5F2',
+              100: '#FFE8E0',
+              200: '#FFD5C7',
+              300: '#FFBFAA',
+              400: '#FFA68D',
+              500: '#FF8A70'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gradient-to-br from-peach-50 to-peach-100 min-h-screen pb-20">
+  <div class="max-w-md mx-auto px-4 py-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 mb-2">Latihan Hari Ini</h1>
+      <p class="text-sm text-gray-600">4 sesi · 3 menit total</p>
+    </div>
+
+    <div class="session-indicator mb-6">
+      <div class="session-dot" data-session="1"></div>
+      <div class="session-dot" data-session="2"></div>
+      <div class="session-dot" data-session="3"></div>
+      <div class="session-dot" data-session="4"></div>
+    </div>
+
+    <div class="card mb-6" id="videoCard">
+      <video id="videoPreview" class="video-preview mb-4" autoplay playsinline muted style="display: none;"></video>
+
+      <div id="placeholderView" class="w-full aspect-[3/4] bg-gradient-to-br from-peach-200 to-peach-300 rounded-2xl flex flex-col items-center justify-center mb-4">
+        <i class="fa-solid fa-video text-white text-6xl mb-4 opacity-50"></i>
+        <p class="text-white font-medium">Siap untuk latihan?</p>
+      </div>
+
+      <div class="text-center mb-4">
+        <div class="timer-display" id="timerDisplay">01:00</div>
+        <p class="text-sm text-gray-500 mt-2" id="sessionInfo">Sesi 1 dari 4</p>
+        <div class="mt-2 flex items-center justify-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-red-500 recording-indicator" id="recordingIndicator" style="display: none;"></div>
+          <span class="text-xs text-gray-500" id="recordingStatus"></span>
+        </div>
+      </div>
+
+      <div id="controlButtons">
+        <button onclick="startWorkout()" id="startBtn" class="btn-primary w-full mb-3">
+          <i class="fa-solid fa-play mr-2"></i>
+          Mulai Latihan
+        </button>
+        <button onclick="pauseWorkout()" id="pauseBtn" class="btn-secondary w-full mb-3" style="display: none;">
+          <i class="fa-solid fa-pause mr-2"></i>
+          Jeda
+        </button>
+        <button onclick="resumeWorkout()" id="resumeBtn" class="btn-primary w-full mb-3" style="display: none;">
+          <i class="fa-solid fa-play mr-2"></i>
+          Lanjutkan
+        </button>
+        <button onclick="stopWorkout()" id="stopBtn" class="btn-secondary w-full" style="display: none;">
+          <i class="fa-solid fa-stop mr-2"></i>
+          Selesai
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="font-semibold text-gray-800 mb-3">
+        <i class="fa-solid fa-circle-info text-peach-500 mr-2"></i>
+        Cara Latihan
+      </h3>
+      <ul class="space-y-2 text-sm text-gray-600">
+        <li class="flex items-start gap-2">
+          <i class="fa-solid fa-check text-green-500 mt-1"></i>
+          <span>Pastikan HP menghadap ke Anda</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fa-solid fa-check text-green-500 mt-1"></i>
+          <span>Lakukan gerakan olahraga selama 1 menit</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fa-solid fa-check text-green-500 mt-1"></i>
+          <span>Latihan akan berhenti jika tidak ada gerakan</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fa-solid fa-check text-green-500 mt-1"></i>
+          <span>Total 4 sesi latihan untuk hari ini</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <nav class="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-100">
+    <div class="max-w-md mx-auto px-4 py-3">
+      <div class="flex justify-around items-center">
+        <a href="/" class="nav-item <%= page === 'beranda' ? 'active' : '' %>">
+          <i class="fa-solid fa-house text-xl mb-1"></i>
+          <span class="text-xs">Beranda</span>
+        </a>
+        <a href="/kalender" class="nav-item <%= page === 'kalender' ? 'active' : '' %>">
+          <i class="fa-regular fa-calendar text-xl mb-1"></i>
+          <span class="text-xs">Kalender</span>
+        </a>
+        <a href="/latihan" class="nav-item <%= page === 'latihan' ? 'active' : '' %>">
+          <i class="fa-solid fa-dumbbell text-xl mb-1"></i>
+          <span class="text-xs">Latihan</span>
+        </a>
+        <a href="/foto" class="nav-item <%= page === 'foto' ? 'active' : '' %>">
+          <i class="fa-regular fa-image text-xl mb-1"></i>
+          <span class="text-xs">Foto</span>
+        </a>
+        <a href="/rekaman" class="nav-item <%= page === 'rekaman' ? 'active' : '' %>">
+          <i class="fa-solid fa-video text-xl mb-1"></i>
+          <span class="text-xs">Rekaman</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <script src="/js/motion.js"></script>
+  <script src="/js/timer.js"></script>
+</body>
+</html>

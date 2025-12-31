@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title><%= title %> - Beauty Fitness Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            peach: {
+              50: '#FFF5F2',
+              100: '#FFE8E0',
+              200: '#FFD5C7',
+              300: '#FFBFAA',
+              400: '#FFA68D',
+              500: '#FF8A70'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gradient-to-br from-peach-50 to-peach-100 min-h-screen pb-20">
+  <div class="max-w-md mx-auto px-4 py-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 mb-2">Galeri Foto</h1>
+      <p class="text-sm text-gray-600">Progress transformasi Anda</p>
+    </div>
+
+    <div id="photoGallery" class="photo-grid mb-6">
+    </div>
+
+    <div id="emptyState" class="empty-state">
+      <i class="fa-regular fa-image"></i>
+      <h3 class="text-lg font-semibold text-gray-700 mb-2">Belum ada foto</h3>
+      <p class="text-sm text-gray-500 mb-6">Mulai dokumentasikan progress Anda</p>
+      <label for="photoInput" class="btn-primary inline-block cursor-pointer">
+        <i class="fa-solid fa-camera mr-2"></i>
+        Ambil Foto
+      </label>
+      <input type="file" id="photoInput" accept="image/*" capture="user">
+    </div>
+
+    <button onclick="document.getElementById('photoInput').click()" id="addPhotoBtn" class="btn-primary w-full" style="display: none;">
+      <i class="fa-solid fa-camera mr-2"></i>
+      Tambah Foto
+    </button>
+  </div>
+
+  <nav class="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-100">
+    <div class="max-w-md mx-auto px-4 py-3">
+      <div class="flex justify-around items-center">
+        <a href="/" class="nav-item <%= page === 'beranda' ? 'active' : '' %>">
+          <i class="fa-solid fa-house text-xl mb-1"></i>
+          <span class="text-xs">Beranda</span>
+        </a>
+        <a href="/kalender" class="nav-item <%= page === 'kalender' ? 'active' : '' %>">
+          <i class="fa-regular fa-calendar text-xl mb-1"></i>
+          <span class="text-xs">Kalender</span>
+        </a>
+        <a href="/latihan" class="nav-item <%= page === 'latihan' ? 'active' : '' %>">
+          <i class="fa-solid fa-dumbbell text-xl mb-1"></i>
+          <span class="text-xs">Latihan</span>
+        </a>
+        <a href="/foto" class="nav-item <%= page === 'foto' ? 'active' : '' %>">
+          <i class="fa-regular fa-image text-xl mb-1"></i>
+          <span class="text-xs">Foto</span>
+        </a>
+        <a href="/rekaman" class="nav-item <%= page === 'rekaman' ? 'active' : '' %>">
+          <i class="fa-solid fa-video text-xl mb-1"></i>
+          <span class="text-xs">Rekaman</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    const photoInput = document.getElementById('photoInput');
+    const photoGallery = document.getElementById('photoGallery');
+    const emptyState = document.getElementById('emptyState');
+    const addPhotoBtn = document.getElementById('addPhotoBtn');
+
+    function loadPhotos() {
+      const photos = JSON.parse(localStorage.getItem('photos') || '[]');
+
+      if (photos.length > 0) {
+        emptyState.style.display = 'none';
+        addPhotoBtn.style.display = 'block';
+        photoGallery.innerHTML = photos.map((photo, index) => `
+          <div class="photo-item">
+            <img src="${photo.data}" alt="Progress ${index + 1}">
+          </div>
+        `).join('');
+      } else {
+        emptyState.style.display = 'block';
+        addPhotoBtn.style.display = 'none';
+        photoGallery.innerHTML = '';
+      }
+    }
+
+    photoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const photos = JSON.parse(localStorage.getItem('photos') || '[]');
+          photos.push({
+            data: event.target.result,
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('photos', JSON.stringify(photos));
+          loadPhotos();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', loadPhotos);
+  </script>
+</body>
+</html>
