@@ -9,6 +9,7 @@ let isRecording = false;
 let recordingNumber = 1;
 let recordingInterval = null;
 let currentRecordingStartTime = 0;
+let reminderInterval = null;
 
 const TOTAL_SESSIONS = 4;
 const SESSION_DURATION = 60;
@@ -25,24 +26,19 @@ const pauseBtn = document.getElementById('pauseBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const stopBtn = document.getElementById('stopBtn');
 
-function updateSessionIndicators() {
-  const dots = document.querySelectorAll('.session-dot');
-  dots.forEach((dot, index) => {
-    const session = index + 1;
-    dot.classList.remove('active', 'completed');
+/* ======================
+   UI UTIL
+====================== */
 
-    if (session < currentSession) {
-      dot.classList.add('completed');
-    } else if (session === currentSession) {
-      dot.classList.add('active');
-    }
+function updateSessionIndicators() {
+  document.querySelectorAll('.session-dot').forEach((dot, i) => {
+    dot.classList.toggle('completed', i + 1 < currentSession);
+    dot.classList.toggle('active', i + 1 === currentSession);
   });
 }
 
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+function formatTime(sec) {
+  return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 }
 
 function updateTimerDisplay() {
@@ -50,182 +46,133 @@ function updateTimerDisplay() {
   sessionInfo.textContent = `Sesi ${currentSession} dari ${TOTAL_SESSIONS}`;
 }
 
+/* ======================
+   CAMERA
+====================== */
+
 async function startCamera() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'user',
-        width: { ideal: 1280 },
-        height: { ideal: 1920 }
-      },
+      video: { facingMode: 'user' },
       audio: false
     });
 
     videoPreview.srcObject = stream;
     videoPreview.style.display = 'block';
     placeholderView.style.display = 'none';
-
-    if (typeof initMotionDetection === 'function') {
-      initMotionDetection(videoPreview);
-    }
-
     return true;
-  } catch (error) {
-    alert('Tidak dapat mengakses kamera. Pastikan Anda memberikan izin akses kamera.');
-    console.error('Camera error:', error);
+  } catch {
+    alert('Izinkan kamera untuk memulai latihan.');
     return false;
   }
 }
 
 function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    stream = null;
-  }
+  stream?.getTracks().forEach(t => t.stop());
+  stream = null;
   videoPreview.srcObject = null;
   videoPreview.style.display = 'none';
   placeholderView.style.display = 'flex';
 }
 
+/* ======================
+   RECORDING
+====================== */
+
 async function startRecording() {
   if (!stream) return;
 
   recordedChunks = [];
+  mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
 
-  try {
-    mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm;codecs=vp9'
+  mediaRecorder.ondataavailable = e => e.data.size && recordedChunks.push(e.data);
+
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    sendToTelegram(blob, {
+      session: currentSession,
+      videoNumber: recordingNumber
     });
+    recordingNumber++;
+    recordedChunks = [];
+  };
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data);
-      }
-    };
+  mediaRecorder.start();
+  isRecording = true;
+  currentRecordingStartTime = Date.now();
+  recordingIndicator.style.display = 'block';
+  updateRecordingStatus();
 
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      await saveRecording(blob);
-      recordedChunks = [];
-    };
-
-    mediaRecorder.start();
-    isRecording = true;
-    currentRecordingStartTime = Date.now();
-    recordingIndicator.style.display = 'block';
-    updateRecordingStatus();
-
-    recordingInterval = setTimeout(async () => {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-        isRecording = false;
-        recordingIndicator.style.display = 'none';
-
-        if (timeRemaining > 0 && !isPaused) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          await startRecording();
-          recordingNumber++;
-        }
-      }
-    }, RECORDING_INTERVAL * 1000);
-
-  } catch (error) {
-    console.error('Recording error:', error);
-    alert('Tidak dapat merekam video.');
-  }
-}
-
-function updateRecordingStatus() {
-  if (isRecording) {
-    const elapsed = Math.floor((Date.now() - currentRecordingStartTime) / 1000);
-    const remaining = RECORDING_INTERVAL - elapsed;
-    recordingStatus.textContent = `Merekam... ${remaining}s`;
-
-    if (remaining > 0) {
-      setTimeout(updateRecordingStatus, 1000);
+  recordingInterval = setTimeout(() => {
+    if (mediaRecorder.state === 'recording' && !isPaused) {
+      mediaRecorder.stop();
+      recordingIndicator.style.display = 'none';
+      startRecording();
     }
-  } else {
-    recordingStatus.textContent = '';
-  }
+  }, RECORDING_INTERVAL * 1000);
 }
 
 function stopRecording() {
-  if (recordingInterval) {
-    clearTimeout(recordingInterval);
-    recordingInterval = null;
-  }
-
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
-  }
-
+  clearTimeout(recordingInterval);
+  recordingInterval = null;
+  if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
   isRecording = false;
   recordingIndicator.style.display = 'none';
   recordingStatus.textContent = '';
 }
 
-async function saveRecording(blob) {
-  const recordings = JSON.parse(localStorage.getItem('workoutRecordings') || '[]');
-
-  const recording = {
-    session: currentSession,
-    videoNumber: recordingNumber,
-    timestamp: new Date().toISOString(),
-    size: blob.size,
-    sentToExpert: false
-  };
-
-  recordings.push(recording);
-  localStorage.setItem('workoutRecordings', JSON.stringify(recordings));
-
-  await sendToTelegram(blob, recording);
+function updateRecordingStatus() {
+  if (!isRecording) return;
+  const elapsed = Math.floor((Date.now() - currentRecordingStartTime) / 1000);
+  recordingStatus.textContent = `Rekam ${RECORDING_INTERVAL - elapsed}s`;
+  setTimeout(updateRecordingStatus, 1000);
 }
 
-async function sendToTelegram(blob, metadata) {
-  if (typeof sendChunkToServer === 'function') {
-    sendChunkToServer(
-      blob,
-      metadata.session,
-      metadata.videoNumber
-    );
-  }
-}
+/* ======================
+   TIMER
+====================== */
 
 function startTimer() {
   timerInterval = setInterval(() => {
-    if (!isPaused) {
-      timeRemaining--;
-      updateTimerDisplay();
-
-      if (typeof checkMotion === 'function') {
-        const hasMotion = checkMotion();
-        if (!hasMotion) {
-          pauseWorkout(true);
-          showMotionAlert();
-        }
-      }
-
-      if (timeRemaining <= 0) {
-        completeSession();
-      }
-    }
+    if (isPaused) return;
+    timeRemaining--;
+    updateTimerDisplay();
+    if (timeRemaining <= 0) completeSession();
   }, 1000);
 }
 
-function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
+
+async function sendToTelegram(blob, meta) {
+  try {
+    const formData = new FormData();
+    formData.append("video", blob);
+    formData.append("session", meta.session);
+    formData.append("videoNumber", meta.videoNumber);
+
+    await fetch("/api/upload-video", {
+      method: "POST",
+      body: formData
+    });
+  } catch (err) {
+    console.error("Gagal kirim video ke Telegram", err);
   }
 }
 
-function showMotionAlert() {
-  alert('Anda terdeteksi tidak melakukan gerakan olahraga.\nPastikan HP menghadap Anda.\nKlik mulai ulang hitungan.');
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
 }
 
+/* ======================
+   WORKOUT FLOW
+====================== */
+
 async function startWorkout() {
-  const cameraStarted = await startCamera();
-  if (!cameraStarted) return;
+  if (!(await startCamera())) return;
+
+  showReminder("Pastikan HP disandarkan / tripod dan tubuh terlihat di kamera");
+  startReminderLoop();
 
   recordingNumber = 1;
   isPaused = false;
@@ -238,10 +185,10 @@ async function startWorkout() {
   stopBtn.style.display = 'block';
 }
 
-function pauseWorkout(fromMotionDetection = false) {
+function pauseWorkout() {
   isPaused = true;
   stopRecording();
-
+  stopReminderLoop();
   pauseBtn.style.display = 'none';
   resumeBtn.style.display = 'block';
 }
@@ -249,7 +196,7 @@ function pauseWorkout(fromMotionDetection = false) {
 async function resumeWorkout() {
   isPaused = false;
   await startRecording();
-
+  startReminderLoop();
   resumeBtn.style.display = 'none';
   pauseBtn.style.display = 'block';
 }
@@ -258,12 +205,7 @@ function stopWorkout() {
   stopTimer();
   stopRecording();
   stopCamera();
-
-  if (typeof stopMotionDetection === 'function') {
-    stopMotionDetection();
-  }
-
-  alert('Latihan dihentikan.');
+  stopReminderLoop();
   resetWorkout();
 }
 
@@ -272,19 +214,13 @@ async function completeSession() {
   stopRecording();
 
   if (currentSession < TOTAL_SESSIONS) {
-    const continueNextSession = confirm(`Sesi ${currentSession} selesai!\n\nLanjut ke sesi ${currentSession + 1}?`);
-
-    if (continueNextSession) {
-      currentSession++;
-      timeRemaining = SESSION_DURATION;
-      recordingNumber = 1;
-      updateTimerDisplay();
-      updateSessionIndicators();
-      await startRecording();
-      startTimer();
-    } else {
-      completeAllSessions();
-    }
+    currentSession++;
+    timeRemaining = SESSION_DURATION;
+    recordingNumber = 1;
+    updateTimerDisplay();
+    updateSessionIndicators();
+    await startRecording();
+    startTimer();
   } else {
     completeAllSessions();
   }
@@ -294,29 +230,37 @@ function completeAllSessions() {
   stopTimer();
   stopRecording();
   stopCamera();
-
-  if (typeof stopMotionDetection === 'function') {
-    stopMotionDetection();
-  }
-
-  const workouts = JSON.parse(localStorage.getItem('workouts') || '[]');
-  workouts.push({
-    date: new Date().toISOString(),
-    sessions: currentSession
-  });
-  localStorage.setItem('workouts', JSON.stringify(workouts));
-
-  const today = new Date().toISOString().split('T')[0];
-  const markedDates = JSON.parse(localStorage.getItem('markedDates') || '[]');
-  if (!markedDates.includes(today)) {
-    markedDates.push(today);
-    localStorage.setItem('markedDates', JSON.stringify(markedDates));
-  }
-
-  alert(`Selamat! Semua sesi latihan hari ini selesai.\n\nTotal: ${currentSession} sesi\nVideo: ${recordingNumber} video`);
+  stopReminderLoop();
   resetWorkout();
-  window.location.href = '/';
 }
+
+/* ======================
+   REMINDER (MANUAL)
+====================== */
+
+function showReminder(text) {
+  const el = document.getElementById("reminderToast");
+  if (!el) return;
+  el.textContent = text;
+  el.style.opacity = "1";
+  setTimeout(() => el.style.opacity = "0", 3000);
+}
+
+function startReminderLoop() {
+  stopReminderLoop();
+  reminderInterval = setInterval(() => {
+    showReminder("Tetap lakukan gerakan dan pastikan tubuh tetap terlihat di kamera");
+  }, 20000);
+}
+
+function stopReminderLoop() {
+  clearInterval(reminderInterval);
+  reminderInterval = null;
+}
+
+/* ======================
+   RESET
+====================== */
 
 function resetWorkout() {
   currentSession = 1;
@@ -334,14 +278,11 @@ function resetWorkout() {
   stopBtn.style.display = 'none';
 }
 
+/* ======================
+   INIT
+====================== */
+
 window.addEventListener('DOMContentLoaded', () => {
   updateTimerDisplay();
   updateSessionIndicators();
-});
-
-window.addEventListener('beforeunload', (e) => {
-  if (isRecording || timerInterval) {
-    e.preventDefault();
-    e.returnValue = '';
-  }
 });
